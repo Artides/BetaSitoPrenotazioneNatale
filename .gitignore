@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+**/local.settings.json
+.env
+.env.*
+*.user
+*.suo
+.DS_Store
+.vs/
+.vscode/
+.local/
+artifacts/
+
+**/__pycache__/
+*.pyc

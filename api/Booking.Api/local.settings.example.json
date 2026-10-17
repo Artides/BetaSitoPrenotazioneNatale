@@ -1,0 +1,25 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AzureWebJobsStorage": "",
+    "BOOKING_TIME_ZONE": "Europe/Rome",
+    "BOOKING_START_DATE": "2026-11-07",
+    "BOOKING_END_DATE": "2026-12-05",
+    "BOOKING_MORNING_START": "10:00",
+    "BOOKING_MORNING_END": "13:00",
+    "BOOKING_AFTERNOON_START": "14:00",
+    "BOOKING_AFTERNOON_END": "16:30",
+    "BOOKING_DURATION_MINUTES": "30",
+    "BOOKING_BREAK_MINUTES": "30",
+    "ALLOWED_ORIGINS": "http://localhost:8080,http://127.0.0.1:8080",
+    "GOOGLE_CALENDAR_ID": "",
+    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_CLIENT_SECRET": "",
+    "GOOGLE_REFRESH_TOKEN": "",
+    "EMAIL_CONNECTION_STRING": "",
+    "EMAIL_SENDER": "",
+    "TURNSTILE_SECRET_KEY": "",
+    "TURNSTILE_ALLOWED_HOSTNAMES": "localhost,127.0.0.1"
+  }
+}

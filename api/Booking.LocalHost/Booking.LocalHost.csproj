@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+<PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><UserSecretsId>SitoNatale2026-BookingApi</UserSecretsId></PropertyGroup>
+<ItemGroup><Compile Include="../Booking.Api/Configuration/*.cs" Link="Configuration/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Models/*.cs" Link="Models/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Utils/*.cs" Link="Utils/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Services/*.cs" Exclude="../Booking.Api/Services/EmailService.cs" Link="Services/%(Filename)%(Extension)" /></ItemGroup>
+</Project>

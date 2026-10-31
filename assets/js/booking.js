@@ -69,7 +69,7 @@ $("booking-form").addEventListener("submit", async event => {
     const result = await createBooking({ ...pending.data, captchaToken: captchaToken || undefined }, pending.key);
     try { sessionStorage.setItem("booking-confirmation", JSON.stringify({ ...result, timezone: availability.timezone })); } catch {
       // A successful booking must remain visible even with browser storage disabled.
-      $("details-section").replaceChildren(); const p = document.createElement("p"); p.textContent = `Prenotazione confermata. Codice: ${result.bookingId}. ${dateLabel(result.start, availability.timezone)} · ${slot.label}. Conserva questi dati.`; $("details-section").append(p); storePending(null); return;
+      $("details-section").replaceChildren(); const p = document.createElement("p"); p.textContent = `Prenotazione confermata. ${dateLabel(result.start, availability.timezone)} · ${slot.label}. Ti aspettiamo!`; $("details-section").append(p); storePending(null); return;
     }
     storePending(null); window.location.assign("./success.html");
   } catch (error) {

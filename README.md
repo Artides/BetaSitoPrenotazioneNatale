@@ -6,7 +6,7 @@ Frontend HTML/CSS/Vanilla JS senza build, compatibile con GitHub Pages, e backen
 
 Implementati frontend, endpoint, integrazione REST Google Calendar/OAuth, ricontrollo finale senza lock distribuito, idempotenza persistente tramite ID evento deterministico, email Gmail SMTP con password per le app, CORS, validazione, limite richieste, punto di integrazione Turnstile e workflow Pages.
 
-Verifica dell'integrazione Gmail: compilazione riuscita dell'host locale e del progetto Azure Functions, 50 test automatici superati. I test usano provider Google e trasporto email simulati: non scrivono sul calendario reale e non inviano email. La compilazione Functions riporta due avvisi MSB4011 di importazione duplicata dell'SDK di pubblicazione. Una prova SMTP reale separata è stata accettata da Gmail il 31/10/2026; il percorso .NET sul Mac ha invece rilevato un errore di verifica della revoca del certificato (`RevocationStatusUnknown`). La prova separata conferma le credenziali e il servizio Gmail, non il funzionamento della Function distribuita. Non è stato eseguito alcun deploy durante questa modifica.
+Verifica dell'integrazione Gmail: compilazione riuscita dell'host locale e del progetto Azure Functions, 51 test automatici superati. I test usano provider Google e trasporto email simulati: non scrivono sul calendario reale e non inviano email. La compilazione Functions riporta due avvisi MSB4011 di importazione duplicata dell'SDK di pubblicazione. L'utente ha confermato il corretto invio di email dalla Function Azure. Il percorso .NET sul Mac ha invece rilevato un errore di verifica della revoca del certificato (`RevocationStatusUnknown`). Il nuovo template HTML è verificabile nell'anteprima locale; non è stato eseguito alcun deploy durante questa modifica.
 
 ## Business rules
 
@@ -114,6 +114,8 @@ Lo script lascia invariati i valori quando premi Invio. I secrets sono un meccan
 
 Il servizio usa MailKit e `smtp.gmail.com:587` con STARTTLS obbligatorio e verifica standard del certificato. Il mittente è `GMAIL_ADDRESS`; le risposte dei clienti arrivano alla stessa casella. Non servono OAuth Gmail o Azure Communication Services per l'invio. Le vecchie voci `EMAIL_CONNECTION_STRING` e `EMAIL_SENDER` non vengono più lette. Le credenziali Calendar restano separate e invariate.
 
+La conferma contiene sia testo semplice sia HTML, con riepilogo dell'appuntamento e collegamento WhatsApp al numero `3926404457`. Nome e codice prenotazione vengono codificati prima dell'inserimento nell'HTML. Il template usa intenzionalmente tabelle, stili inline e font disponibili sul dispositivo (Arial per il testo, Georgia per il titolo) per la compatibilità con i client email, senza immagini o font remoti.
+
 Se mancano i secrets o Gmail rifiuta l'invio, la prenotazione rimane confermata con `emailSent: false`. `emailSent: true` indica che Gmail ha accettato il messaggio, non garantisce l'arrivo nella Posta in arrivo. Restano validi i limiti e i controlli antispam di Gmail. Cambiando la password principale Google vengono revocate le password per le app.
 
 ### Prova email senza prenotazioni
@@ -126,7 +128,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project api/Booking.LocalHost --
 
 L'oggetto è `Test email prenotazioni`. Non apre un server HTTP, non crea prenotazioni e non legge o scrive Calendar. Il comando termina con codice 0 quando Gmail accetta il messaggio, 1 se l'invio fallisce. I normali avvii locali `--demo` e `--live` continuano a disabilitare l'invio reale delle conferme; le Functions usano invece il servizio Gmail.
 
-Nel test .NET su questo Mac il collegamento si ferma prima dell'autenticazione con `RemoteCertificateChainErrors / RevocationStatusUnknown`. Il trasporto riporta nei log soltanto il tipo di errore e gli stati della catena, senza credenziali né risposte del provider. Non sono state introdotte eccezioni alla validazione TLS o al controllo di revoca: questi restano attivi anche nella Function. La verifica reale del percorso .NET su Azure va effettuata dopo aver configurato `GMAIL_ADDRESS` e `GMAIL_APP_PASSWORD` nelle impostazioni della Function e distribuito il codice.
+Nel test .NET su questo Mac il collegamento si ferma prima dell'autenticazione con `RemoteCertificateChainErrors / RevocationStatusUnknown`. Il trasporto riporta nei log soltanto il tipo di errore e gli stati della catena, senza credenziali né risposte del provider. Non sono state introdotte eccezioni alla validazione TLS o al controllo di revoca: questi restano attivi anche nella Function. L'utente ha verificato con successo l'invio con .NET su Azure dopo aver configurato `GMAIL_ADDRESS` e `GMAIL_APP_PASSWORD` e distribuito il codice. Le modifiche successive al template richiedono una nuova pubblicazione del backend.
 
 ## Configurazione Google Calendar
 

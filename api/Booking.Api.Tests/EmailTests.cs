@@ -94,6 +94,24 @@ public sealed class EmailTests
     }
 
     [Fact]
+    public async Task ConfirmationHtmlEscapesCustomerContentAndKeepsPlainTextAlternative()
+    {
+        var transport = new FakeTransport();
+        var request = Request with { Customer = new("Mario <img src=x onerror=alert(1)> & Rossi", "customer@example.com") };
+        var booking = Booking with { BookingId = "code<script>unsafe</script>" };
+        Assert.True(await Service(Options, transport).SendAsync(request, booking, default));
+        Assert.Contains("Mario &lt;img", transport.Html);
+        Assert.Contains("&amp; Rossi", transport.Html);
+        Assert.Contains("code&lt;script&gt;unsafe&lt;/script&gt;", transport.Html);
+        Assert.DoesNotContain("<img", transport.Html);
+        Assert.DoesNotContain("<script>", transport.Html);
+        Assert.Contains("https://wa.me/393926404457", transport.Html);
+        Assert.Contains("Data: 10 novembre 2026", transport.Text);
+        Assert.Contains("3926404457", transport.Text);
+        Assert.Equal("multipart/alternative", transport.BodyType);
+    }
+
+    [Fact]
     public async Task BookingRetryDoesNotSendSecondGmailConfirmation()
     {
         var rules = new BookingOptions();
@@ -117,7 +135,7 @@ public sealed class EmailTests
     {
         public int Sends { get; private set; }
         public Exception? Error { get; init; }
-        public string? From, To, Subject, Text, Username, Password;
+        public string? From, To, Subject, Text, Html, BodyType, Username, Password;
 
         public Task SendAsync(MimeMessage message, string username, string appPassword, CancellationToken ct)
         {
@@ -128,6 +146,8 @@ public sealed class EmailTests
             To = message.To.Mailboxes.Single().Address;
             Subject = message.Subject;
             Text = message.TextBody;
+            Html = message.HtmlBody;
+            BodyType = message.Body?.ContentType.MimeType;
             Username = username;
             Password = appPassword;
             return Task.CompletedTask;

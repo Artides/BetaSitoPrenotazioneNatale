@@ -38,6 +38,9 @@ body{font-family:var(--font);color:var(--ink);background:var(--paper);line-heigh
   background: var(--wash);
 }
 .hero-gallery .hero-photo { grid-column: 1 / -1; }
+@media (max-width: 799px) {
+  .hero-gallery > img:not(.hero-photo) { display: none; }
+}
 .confirmation-photo { max-width: 440px; margin: 28px auto; }
 .confirmation-photo img {
   width: 100%;

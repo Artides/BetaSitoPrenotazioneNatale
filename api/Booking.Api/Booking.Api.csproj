@@ -4,7 +4,9 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.50.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.0" />
-    <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
+    <!-- Override MimeKit's dependency with the patched release (CVE-2026-84008, CVE-2026-70162). -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="host.json" />

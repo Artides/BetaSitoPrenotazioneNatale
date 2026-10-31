@@ -6,5 +6,5 @@ builder.ConfigureFunctionsWebApplication();
 builder.Configuration.AddEnvironmentVariables();
 if(builder.Environment.IsDevelopment()) builder.Configuration.AddUserSecrets<Program>(optional:true);
 builder.Services.AddBookingCore(builder.Configuration);
-builder.Services.AddSingleton<IEmailService,EmailService>();
+builder.Services.AddGmailEmail();
 builder.Build().Run();

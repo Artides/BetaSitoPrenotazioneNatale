@@ -4,9 +4,9 @@ Frontend HTML/CSS/Vanilla JS senza build, compatibile con GitHub Pages, e backen
 
 ## Stato e verifiche
 
-Implementati frontend, endpoint, integrazione REST Google Calendar/OAuth, ricontrollo finale senza lock distribuito, idempotenza persistente tramite ID evento deterministico, email Azure Communication Services, CORS, validazione, limite richieste, punto di integrazione Turnstile e workflow Pages.
+Implementati frontend, endpoint, integrazione REST Google Calendar/OAuth, ricontrollo finale senza lock distribuito, idempotenza persistente tramite ID evento deterministico, email Gmail SMTP con password per le app, CORS, validazione, limite richieste, punto di integrazione Turnstile e workflow Pages.
 
-L'ambiente Codex ha compilato l'host locale e i servizi condivisi. I test automatici eseguono la logica applicativa e il trasporto Google simulato; non scrivono sul calendario reale e non inviano email. Il runtime Functions e gli adattatori Azure richiedono un restore NuGet, Core Tools e credenziali reali per la verifica completa. In questa sessione DNS/rete NuGet e apertura porte sono limitati; `func` non è installato. Non è stato eseguito alcun deploy. La cartella iniziale non contieneva un repository Git né un remoto.
+Verifica dell'integrazione Gmail: compilazione riuscita dell'host locale e del progetto Azure Functions, 50 test automatici superati. I test usano provider Google e trasporto email simulati: non scrivono sul calendario reale e non inviano email. La compilazione Functions riporta due avvisi MSB4011 di importazione duplicata dell'SDK di pubblicazione. Una prova SMTP reale separata è stata accettata da Gmail il 31/10/2026; il percorso .NET sul Mac ha invece rilevato un errore di verifica della revoca del certificato (`RevocationStatusUnknown`). La prova separata conferma le credenziali e il servizio Gmail, non il funzionamento della Function distribuita. Non è stato eseguito alcun deploy durante questa modifica.
 
 ## Business rules
 
@@ -53,7 +53,7 @@ scripts/               configurazione secrets e test
 - Python 3 per servire il frontend.
 - Accesso a NuGet, Google Calendar e ai servizi Azure.
 - Calendario Google dedicato e progetto Google Cloud con Calendar API abilitata.
-- Azure Communication Services Email con mittente verificato, solo per le email reali.
+- Casella Gmail con verifica in due passaggi e password per le app, solo per le email reali.
 
 Core Tools, da terminale con Homebrew:
 
@@ -87,16 +87,46 @@ dotnet user-secrets set "GOOGLE_CLIENT_ID" "VALORE" --project api/Booking.Api
 | `GOOGLE_CLIENT_ID` | Google reale | Client ID OAuth 2.0 del progetto Google Cloud |
 | `GOOGLE_CLIENT_SECRET` | Google reale | Client secret OAuth corrispondente |
 | `GOOGLE_REFRESH_TOKEN` | Google reale | Refresh token dell'account con permesso di modifica sul calendario |
-| `EMAIL_CONNECTION_STRING` | Email reali, facoltative | Connessione Azure Communication Services collegata al dominio email |
-| `EMAIL_SENDER` | Email reali, facoltative | Indirizzo mittente verificato di ACS |
+| `GMAIL_ADDRESS` | Email reali, facoltative | Indirizzo completo della casella Gmail usata come mittente e utente SMTP |
+| `GMAIL_APP_PASSWORD` | Email reali, facoltative | Password per le app generata da Google, diversa dalla password principale dell'account |
 | `TURNSTILE_SECRET_KEY` | Solo se abiliti CAPTCHA | Chiave privata Cloudflare Turnstile |
 | `TURNSTILE_ALLOWED_HOSTNAMES` | Se abiliti CAPTCHA | Host autorizzati separati da virgola, senza schema o path |
 
-`GOOGLE_CALENDAR_ID` e `EMAIL_SENDER` sono identificativi; non sono API key. **Una API key Google non permette di creare prenotazioni**: serve l'autorizzazione OAuth con refresh token.
+`GOOGLE_CALENDAR_ID` e `GMAIL_ADDRESS` sono identificativi; non sono API key. **Una API key Google non permette di creare prenotazioni**: serve l'autorizzazione OAuth con refresh token.
 
 `AzureWebJobsStorage` è la configurazione dell'host Functions. Non esiste più una connessione Storage applicativa per le prenotazioni. Per questa API con soli trigger HTTP può restare vuota nel file locale iniziale; se Core Tools o il piano Azure richiedono storage, configurarla nel file locale ignorato da Git / Application Settings. Con Azurite usare `UseDevelopmentStorage=true`. L'host carica questa impostazione prima dell'avvio del worker: non affidarsi al caricamento custom dei secrets del worker per le impostazioni dell'host.
 
 Lo script lascia invariati i valori quando premi Invio. I secrets sono un meccanismo locale di sviluppo, non una cassaforte cifrata: in Azure usare Application Settings o riferimenti Key Vault. Non mandarmi le chiavi in chat.
+
+## Configurazione email Gmail
+
+1. Attiva la verifica in due passaggi sulla casella Google che vuoi usare come mittente.
+2. Apri [Password per le app](https://myaccount.google.com/apppasswords) e genera una password dedicata, ad esempio con nome `SitoNatale2026`. Non usare la password principale di Google. Alcuni account gestiti o con Protezione avanzata non consentono questa funzione.
+3. Dalla root esegui il prompt dedicato, che nasconde i valori e li salva nello store .NET `SitoNatale2026-BookingApi` fuori dal repository:
+
+   ```bash
+   ./scripts/configure-secrets.sh --gmail
+   ```
+
+   Inserisci l'indirizzo mittente alla voce `GMAIL_ADDRESS` e la password dedicata alla voce `GMAIL_APP_PASSWORD`. Gli spazi con cui Google raggruppa la password vengono rimossi al caricamento. Premendo Invio si conserva il valore precedente. Non inviare la password in chat.
+
+4. In produzione aggiungi le stesse due voci in Azure Function App → Settings → Environment variables / Application settings, oppure tramite riferimenti Key Vault. Lo store User Secrets del Mac non viene trasferito su Azure.
+
+Il servizio usa MailKit e `smtp.gmail.com:587` con STARTTLS obbligatorio e verifica standard del certificato. Il mittente è `GMAIL_ADDRESS`; le risposte dei clienti arrivano alla stessa casella. Non servono OAuth Gmail o Azure Communication Services per l'invio. Le vecchie voci `EMAIL_CONNECTION_STRING` e `EMAIL_SENDER` non vengono più lette. Le credenziali Calendar restano separate e invariate.
+
+Se mancano i secrets o Gmail rifiuta l'invio, la prenotazione rimane confermata con `emailSent: false`. `emailSent: true` indica che Gmail ha accettato il messaggio, non garantisce l'arrivo nella Posta in arrivo. Restano validi i limiti e i controlli antispam di Gmail. Cambiando la password principale Google vengono revocate le password per le app.
+
+### Prova email senza prenotazioni
+
+Questo comando invia **una vera email** al destinatario indicato; eseguirlo solo dopo aver configurato i secrets e aver deciso esplicitamente di effettuare la prova:
+
+```bash
+ASPNETCORE_ENVIRONMENT=Development dotnet run --project api/Booking.LocalHost -- --test-email artides.mat@gmail.com
+```
+
+L'oggetto è `Test email prenotazioni`. Non apre un server HTTP, non crea prenotazioni e non legge o scrive Calendar. Il comando termina con codice 0 quando Gmail accetta il messaggio, 1 se l'invio fallisce. I normali avvii locali `--demo` e `--live` continuano a disabilitare l'invio reale delle conferme; le Functions usano invece il servizio Gmail.
+
+Nel test .NET su questo Mac il collegamento si ferma prima dell'autenticazione con `RemoteCertificateChainErrors / RevocationStatusUnknown`. Il trasporto riporta nei log soltanto il tipo di errore e gli stati della catena, senza credenziali né risposte del provider. Non sono state introdotte eccezioni alla validazione TLS o al controllo di revoca: questi restano attivi anche nella Function. La verifica reale del percorso .NET su Azure va effettuata dopo aver configurato `GMAIL_ADDRESS` e `GMAIL_APP_PASSWORD` nelle impostazioni della Function e distribuito il codice.
 
 ## Configurazione Google Calendar
 
@@ -159,7 +189,7 @@ Per controllare il flusso UI senza creare eventi o inviare email:
 ASPNETCORE_ENVIRONMENT=Development dotnet run --project api/Booking.LocalHost -- --demo
 ```
 
-Poi avvia il server del frontend come sopra. La demo mantiene gli appuntamenti **solo in memoria**: si perdono alla chiusura. Si avvia solo con ambiente Development e flag `--demo`. Non verifica l’adattatore ACS né l'host Functions. Per provare manualmente uno spostamento, usare il calendario reale e richiamare le disponibilità.
+Poi avvia il server del frontend come sopra. La demo mantiene gli appuntamenti **solo in memoria**: si perdono alla chiusura. Si avvia solo con ambiente Development e flag `--demo`. Non verifica l’adattatore SMTP né l'host Functions. Per provare manualmente uno spostamento, usare il calendario reale e richiamare le disponibilità.
 
 ## API
 
@@ -227,7 +257,7 @@ Se il runner VSTest non può aprire socket, eseguire gli stessi metodi xUnit nel
 ./scripts/test-in-process.sh
 ```
 
-Le suite coprono stagione inclusiva, orari, buffer bidirezionale, pausa a pranzo, eventi lunghi/fuori orario/intera giornata, spostamenti, ora legale, passato, payload/validazione, conflitto finale e rifiuto di slot già prenotati, idempotenza, errore email, CORS, preflight, rate limit, payload e paginazione Google. Verificano esplicitamente che venga creato un solo intervallo reale di 30 minuti.
+Le suite coprono stagione inclusiva, orari, buffer bidirezionale, pausa a pranzo, eventi lunghi/fuori orario/intera giornata, spostamenti, ora legale, passato, payload/validazione, conflitto finale e rifiuto di slot già prenotati, idempotenza, errore email, CORS, preflight, rate limit, payload e paginazione Google. I test email usano un trasporto simulato: verificano mittente, destinatario, fuso italiano, secrets mancanti, cancellazione, errori senza credenziali nei log e assenza di duplicati nei retry. Non si collegano a Gmail. Verificano esplicitamente che venga creato un solo intervallo reale di 30 minuti.
 
 ### Prova reale di creazione su Google Calendar
 
@@ -239,7 +269,7 @@ dotnet run --project api/Booking.IntegrationTests -- --create 2026-10-15 10:00
 
 Il comando crea sul calendario configurato `Prenotazione - TEST INTEGRAZIONE`, il **15 ottobre 2026 dalle 10:00 alle 10:30 Europe/Rome**. Non invia email o inviti. Prima controlla occupazioni e pausa virtuale; dopo la creazione rilegge l'evento e verifica inizio, fine e identificativo. Ripetere il comando usa lo stesso ID e non duplica l'evento. L'evento rimane sul calendario per l'ispezione manuale.
 
-È una verifica dell'adattatore Calendar: chiama direttamente il servizio per consentire la data richiesta fuori stagione, senza cambiare le regole produttive della POST `/api/book`. Non verifica Functions o ACS.
+È una verifica dell'adattatore Calendar: chiama direttamente il servizio per consentire la data richiesta fuori stagione, senza cambiare le regole produttive della POST `/api/book`. Non verifica Functions o SMTP.
 
 Tentativo da Codex del 15/10/2026: compilazione riuscita, chiamata Google bloccata da `NameResolutionError` prima della creazione. Successivamente il test eseguito dal terminale del Mac è riuscito: l’utente ha confermato la comparsa dell’appuntamento nel calendario.
 
@@ -270,3 +300,6 @@ Prima della pubblicazione completare `privacy.html` con titolare/recapiti, base 
 - [Google Calendar: lista eventi](https://developers.google.com/workspace/calendar/api/v3/reference/events/list)
 - [Google Calendar: inserimento eventi](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)
 - [OAuth Google per applicazioni web](https://developers.google.com/identity/protocols/oauth2/web-server)
+- [Password per le app Google](https://support.google.com/accounts/answer/185833?hl=it)
+- [Gmail SMTP](https://developers.google.com/workspace/gmail/imap/imap-smtp)
+- [Limiti di invio Gmail](https://support.google.com/mail/answer/22839?hl=it)

@@ -1,6 +1,13 @@
 using Booking.Api.Configuration;
 namespace Booking.Api.Services;
 public static class ServiceRegistration {
+    public static IServiceCollection AddGmailEmail(this IServiceCollection services) {
+        services.AddSingleton<ISmtpEmailTransport,GmailSmtpTransport>();
+        services.AddSingleton<EmailService>();
+        services.AddSingleton<IEmailService>(s=>s.GetRequiredService<EmailService>());
+        return services;
+    }
+
     public static IServiceCollection AddBookingCore(this IServiceCollection services,IConfiguration config) {
         services.AddSingleton(BookingOptions.Load(config));
         services.AddSingleton(GoogleCalendarOptions.Load(config));

@@ -1,9 +1,29 @@
 using Booking.Api.Configuration;
 using Booking.Api.Services;
+var testEmail = args.Length == 2 && args[0] == "--test-email";
 var demo = args.Contains("--demo");
 var live = args.Contains("--live");
-var builder = WebApplication.CreateBuilder(args.Where(a => a is not "--demo" and not "--live").ToArray());
+if (testEmail) Console.WriteLine("Preparazione del test email...");
+var builder = WebApplication.CreateBuilder(testEmail ? [] : args.Where(a => a is not "--demo" and not "--live").ToArray());
+if (testEmail) Console.WriteLine("Caricamento dei secrets locali...");
 builder.Configuration.AddEnvironmentVariables().AddUserSecrets<Program>(optional:true);
+if (testEmail)
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException("Email test requires Development.");
+    // This path opens no HTTP listener and never calls Google Calendar or BookingService.
+    builder.Services.AddSingleton(EmailOptions.Load(builder.Configuration));
+    builder.Services.AddSingleton(BookingOptions.Load(builder.Configuration));
+    builder.Services.AddGmailEmail();
+    Console.WriteLine("Configurazione del servizio Gmail...");
+    await using var emailApp = builder.Build();
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+    Console.WriteLine("Invio dell'email di prova tramite Gmail...");
+    var sent = await emailApp.Services.GetRequiredService<EmailService>().SendTestAsync(args[1], timeout.Token);
+    Console.WriteLine(sent ? "Email di prova accettata da Gmail; controlla anche la cartella Spam." : "Email di prova non inviata. Verifica GMAIL_ADDRESS e GMAIL_APP_PASSWORD.");
+    Environment.ExitCode = sent ? 0 : 1;
+    return;
+}
 // Both modes are explicit and available only on the local Development host.
 if (!builder.Environment.IsDevelopment() || demo == live)
     throw new InvalidOperationException("LocalHost requires Development and exactly one of --live (Google Calendar) or --demo (in memory).");

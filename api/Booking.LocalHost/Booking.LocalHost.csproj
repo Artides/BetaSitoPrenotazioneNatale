@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><UserSecretsId>SitoNatale2026-BookingApi</UserSecretsId></PropertyGroup>
-<ItemGroup><Compile Include="../Booking.Api/Configuration/*.cs" Link="Configuration/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Models/*.cs" Link="Models/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Utils/*.cs" Link="Utils/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Services/*.cs" Exclude="../Booking.Api/Services/EmailService.cs" Link="Services/%(Filename)%(Extension)" /></ItemGroup>
+<ItemGroup><Compile Include="../Booking.Api/Configuration/*.cs" Link="Configuration/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Models/*.cs" Link="Models/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Utils/*.cs" Link="Utils/%(Filename)%(Extension)" /><Compile Include="../Booking.Api/Services/*.cs" Link="Services/%(Filename)%(Extension)" /><PackageReference Include="MailKit" Version="4.17.0" /></ItemGroup>
+<!-- Keep the shared SMTP adapter on the patched MimeKit dependency, as in Booking.Api. -->
+<ItemGroup><PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" /></ItemGroup>
 </Project>

@@ -52,7 +52,7 @@ public sealed class AvailabilityTests {
     [Theory][InlineData(11,6,false)][InlineData(11,7,true)][InlineData(12,5,true)][InlineData(12,6,false)]
     public void InclusiveSeasonBoundaries(int month,int day,bool valid) => Assert.Equal(valid,Service.IsValid(rules.At(new(2026,month,day),new(10,0))));
     [Fact] public async Task RangeIsClampedAndEmptyOutsideSeason() {
-        var all=await Service.GetAsync(new(2020,1,1),new(2030,1,1),default);Assert.Equal(29,all.Days.Count);
+        var all=await Service.GetAsync(new(2020,1,1),new(2030,1,1),default);Assert.Equal(25,all.Days.Count);
         Assert.Empty((await Service.GetAsync(new(2027,1,1),new(2027,1,2),default)).Days);
         Assert.Empty((await Service.GetAsync(new(2026,1,1),new(2026,1,2),default)).Days);
     }
@@ -69,6 +69,27 @@ public sealed class AvailabilityTests {
         Assert.All((await service.GetAsync(null,null,default)).Days,d=>Assert.Empty(d.Slots));
     }
     [Fact] public void MisalignedStartOrSecondsAreRejected() {Assert.False(Service.IsValid(At(10,15)));Assert.False(Service.IsValid(At(10).AddSeconds(1)));}
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(15)]
+    [InlineData(22)]
+    [InlineData(29)]
+    public async Task SundaysHaveNoCandidatesAndAreAbsentFromCalendar(int dayOfMonth) {
+        var day=new DateOnly(2026,11,dayOfMonth);
+        Assert.Empty(Service.Candidates(day));
+        Assert.False(Service.IsValid(rules.At(day,new(10,0))));
+        Assert.Empty((await Service.GetAsync(day,day,default)).Days);
+    }
+
+    [Fact] public async Task SeasonOmitsAllSundaysAndKeepsSaturdaysAndWeekdays() {
+        var result=await Service.GetAsync(null,null,default);
+        Assert.DoesNotContain(result.Days,d=>DateOnly.Parse(d.Date).DayOfWeek==DayOfWeek.Sunday);
+        Assert.Equal("2026-11-07",result.Days.First().Date);
+        Assert.Equal("2026-12-05",result.Days.Last().Date);
+        Assert.Contains(result.Days,d=>d.Date=="2026-11-09" && d.Slots.Count==11);
+        Assert.Contains(result.Days,d=>d.Date=="2026-11-14" && d.Slots.Count==11);
+    }
 }
 internal sealed class FixedClock(DateTimeOffset? now=null) : TimeProvider { public override DateTimeOffset GetUtcNow()=>now??new(2026,10,15,0,0,0,TimeSpan.Zero); }
 internal sealed class FakeCalendar : ICalendarService {

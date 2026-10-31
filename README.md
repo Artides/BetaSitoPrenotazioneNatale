@@ -6,11 +6,11 @@ Frontend HTML/CSS/Vanilla JS senza build, compatibile con GitHub Pages, e backen
 
 Implementati frontend, endpoint, integrazione REST Google Calendar/OAuth, ricontrollo finale senza lock distribuito, idempotenza persistente tramite ID evento deterministico, email Gmail SMTP con password per le app, CORS, validazione, limite richieste, punto di integrazione Turnstile e workflow Pages.
 
-Verifica dell'integrazione Gmail: compilazione riuscita dell'host locale e del progetto Azure Functions, 51 test automatici superati. I test usano provider Google e trasporto email simulati: non scrivono sul calendario reale e non inviano email. La compilazione Functions riporta due avvisi MSB4011 di importazione duplicata dell'SDK di pubblicazione. L'utente ha confermato il corretto invio di email dalla Function Azure. Il percorso .NET sul Mac ha invece rilevato un errore di verifica della revoca del certificato (`RevocationStatusUnknown`). Il nuovo template HTML è verificabile nell'anteprima locale; non è stato eseguito alcun deploy durante questa modifica.
+Verifiche locali: compilazione riuscita dell'host locale e del progetto Azure Functions, 67 test automatici superati, inclusi blocco delle domeniche e CCN facoltativo. I test usano provider Google e trasporto email simulati: non scrivono sul calendario reale e non inviano email. La compilazione Functions riporta due avvisi MSB4011 di importazione duplicata dell'SDK di pubblicazione. L'utente ha confermato il corretto invio di email dalla Function Azure. Il percorso .NET sul Mac ha invece rilevato un errore di verifica della revoca del certificato (`RevocationStatusUnknown`). Il template HTML è verificabile nell'anteprima locale; non è stato eseguito alcun deploy durante questa modifica.
 
 ## Business rules
 
-- Periodo: **07/11/2026 – 05/12/2026 inclusi**, tutti i giorni.
+- Periodo: **07/11/2026 – 05/12/2026 inclusi**, dal lunedì al sabato. **Domeniche sempre escluse**: non compaiono nelle disponibilità e la POST le rifiuta prima di accedere a Calendar, anche se chiamata direttamente o con un vecchio retry. Il giorno viene determinato nel fuso `Europe/Rome`, indipendentemente dall'offset inviato dal client.
 - Fuso: `Europe/Rome`, offset calcolati con `TimeZoneInfo`, senza offset UTC fissi.
 - Orari: **10:00–13:00**, **14:00–16:30**.
 - Durata: **30 minuti**, candidati ogni 30 minuti, 11 slot giornalieri prima di applicare le occupazioni.
@@ -89,6 +89,7 @@ dotnet user-secrets set "GOOGLE_CLIENT_ID" "VALORE" --project api/Booking.Api
 | `GOOGLE_REFRESH_TOKEN` | Google reale | Refresh token dell'account con permesso di modifica sul calendario |
 | `GMAIL_ADDRESS` | Email reali, facoltative | Indirizzo completo della casella Gmail usata come mittente e utente SMTP |
 | `GMAIL_APP_PASSWORD` | Email reali, facoltative | Password per le app generata da Google, diversa dalla password principale dell'account |
+| `GMAIL_BCC_ADDRESS` | Notifica facoltativa | Un singolo indirizzo che riceve la conferma in CCN, invisibile al cliente; vuoto per disabilitarlo |
 | `TURNSTILE_SECRET_KEY` | Solo se abiliti CAPTCHA | Chiave privata Cloudflare Turnstile |
 | `TURNSTILE_ALLOWED_HOSTNAMES` | Se abiliti CAPTCHA | Host autorizzati separati da virgola, senza schema o path |
 
@@ -108,13 +109,13 @@ Lo script lascia invariati i valori quando premi Invio. I secrets sono un meccan
    ./scripts/configure-secrets.sh --gmail
    ```
 
-   Inserisci l'indirizzo mittente alla voce `GMAIL_ADDRESS` e la password dedicata alla voce `GMAIL_APP_PASSWORD`. Gli spazi con cui Google raggruppa la password vengono rimossi al caricamento. Premendo Invio si conserva il valore precedente. Non inviare la password in chat.
+   Inserisci l'indirizzo mittente alla voce `GMAIL_ADDRESS` e la password dedicata alla voce `GMAIL_APP_PASSWORD`. Se vuoi notificare un'altra persona, inserisci un singolo indirizzo in `GMAIL_BCC_ADDRESS`: riceverà in CCN la stessa conferma con i dettagli dell'appuntamento. Se non configurato, l'invio al cliente funziona senza CCN. Gli spazi con cui Google raggruppa la password vengono rimossi al caricamento. Premendo Invio si conserva il valore precedente. Per rimuovere la notifica locale, elimina il secret `GMAIL_BCC_ADDRESS` con `dotnet user-secrets remove GMAIL_BCC_ADDRESS --project api/Booking.Api`. Non inviare la password in chat.
 
-4. In produzione aggiungi le stesse due voci in Azure Function App → Settings → Environment variables / Application settings, oppure tramite riferimenti Key Vault. Lo store User Secrets del Mac non viene trasferito su Azure.
+4. In produzione aggiungi le stesse voci in Azure Function App → Settings → Environment variables / Application settings, oppure tramite riferimenti Key Vault. `GMAIL_BCC_ADDRESS` è facoltativa e può essere lasciata vuota per disabilitare la notifica. Lo store User Secrets del Mac non viene trasferito su Azure.
 
 Il servizio usa MailKit e `smtp.gmail.com:587` con STARTTLS obbligatorio e verifica standard del certificato. Il mittente è `GMAIL_ADDRESS`; le risposte dei clienti arrivano alla stessa casella. Non servono OAuth Gmail o Azure Communication Services per l'invio. Le vecchie voci `EMAIL_CONNECTION_STRING` e `EMAIL_SENDER` non vengono più lette. Le credenziali Calendar restano separate e invariate.
 
-La conferma contiene sia testo semplice sia HTML, con riepilogo dell'appuntamento e collegamento WhatsApp al numero `3926404457`. Nome e codice prenotazione vengono codificati prima dell'inserimento nell'HTML. Il template usa intenzionalmente tabelle, stili inline e font disponibili sul dispositivo (Arial per il testo, Georgia per il titolo) per la compatibilità con i client email, senza immagini o font remoti.
+La conferma contiene sia testo semplice sia HTML, con riepilogo dell'appuntamento e collegamento WhatsApp al numero `3926404457`. L'eventuale `GMAIL_BCC_ADDRESS` è letto soltanto dalla configurazione server e non compare nel destinatario visibile, nel testo o nell'HTML. Il trasporto SMTP nasconde le intestazioni CCN mantenendo la consegna al destinatario aggiuntivo. Un indirizzo CCN malformato fa fallire l'invio (`emailSent: false`), ma la prenotazione resta confermata. I retry non ripetono né l'email al cliente né la copia CCN. Nome e codice prenotazione vengono codificati prima dell'inserimento nell'HTML. Il template usa intenzionalmente tabelle, stili inline e font disponibili sul dispositivo (Arial per il testo, Georgia per il titolo) per la compatibilità con i client email, senza immagini o font remoti.
 
 Se mancano i secrets o Gmail rifiuta l'invio, la prenotazione rimane confermata con `emailSent: false`. `emailSent: true` indica che Gmail ha accettato il messaggio, non garantisce l'arrivo nella Posta in arrivo. Restano validi i limiti e i controlli antispam di Gmail. Cambiando la password principale Google vengono revocate le password per le app.
 
@@ -126,7 +127,7 @@ Questo comando invia **una vera email** al destinatario indicato; eseguirlo solo
 ASPNETCORE_ENVIRONMENT=Development dotnet run --project api/Booking.LocalHost -- --test-email artides.mat@gmail.com
 ```
 
-L'oggetto è `Test email prenotazioni`. Non apre un server HTTP, non crea prenotazioni e non legge o scrive Calendar. Il comando termina con codice 0 quando Gmail accetta il messaggio, 1 se l'invio fallisce. I normali avvii locali `--demo` e `--live` continuano a disabilitare l'invio reale delle conferme; le Functions usano invece il servizio Gmail.
+L'oggetto è `Test email prenotazioni`. Non apre un server HTTP, non crea prenotazioni e non legge o scrive Calendar. Non invia copie al destinatario CCN configurato: quella notifica riguarda solo le vere conferme di prenotazione. Il comando termina con codice 0 quando Gmail accetta il messaggio, 1 se l'invio fallisce. I normali avvii locali `--demo` e `--live` continuano a disabilitare l'invio reale delle conferme; le Functions usano invece il servizio Gmail.
 
 Nel test .NET su questo Mac il collegamento si ferma prima dell'autenticazione con `RemoteCertificateChainErrors / RevocationStatusUnknown`. Il trasporto riporta nei log soltanto il tipo di errore e gli stati della catena, senza credenziali né risposte del provider. Non sono state introdotte eccezioni alla validazione TLS o al controllo di revoca: questi restano attivi anche nella Function. L'utente ha verificato con successo l'invio con .NET su Azure dopo aver configurato `GMAIL_ADDRESS` e `GMAIL_APP_PASSWORD` e distribuito il codice. Le modifiche successive al template richiedono una nuova pubblicazione del backend.
 
@@ -197,7 +198,7 @@ Poi avvia il server del frontend come sopra. La demo mantiene gli appuntamenti *
 
 ### `GET /api/availability?from=2026-11-10&to=2026-11-15`
 
-`from` e `to` sono facoltativi, ISO `yyyy-MM-dd`. Il server limita sempre il risultato alla stagione configurata (inizialmente 29 giorni; configurazione massima di 90 giorni di differenza tra estremi). Intervalli totalmente esterni restituiscono `days: []`; range invertito o date malformate restituiscono 400. Ogni giorno include soltanto gli slot disponibili; giorni pieni includono `slots: []`.
+`from` e `to` sono facoltativi, ISO `yyyy-MM-dd`. Il server limita sempre il risultato alla stagione configurata (inizialmente 29 giorni di calendario, 25 date prenotabili escludendo le domeniche; configurazione massima di 90 giorni di differenza tra estremi). Le domeniche sono omesse completamente da `days`, anche quando si richiede soltanto una domenica. Intervalli totalmente esterni restituiscono `days: []`; range invertito o date malformate restituiscono 400. Ogni giorno include soltanto gli slot disponibili; giorni pieni includono `slots: []`.
 
 ```json
 {"timezone":"Europe/Rome","slotDurationMinutes":30,"breakMinutes":30,"days":[{"date":"2026-11-10","slots":[{"start":"2026-11-10T10:00:00+01:00","label":"10:00"}]}]}
@@ -259,7 +260,7 @@ Se il runner VSTest non può aprire socket, eseguire gli stessi metodi xUnit nel
 ./scripts/test-in-process.sh
 ```
 
-Le suite coprono stagione inclusiva, orari, buffer bidirezionale, pausa a pranzo, eventi lunghi/fuori orario/intera giornata, spostamenti, ora legale, passato, payload/validazione, conflitto finale e rifiuto di slot già prenotati, idempotenza, errore email, CORS, preflight, rate limit, payload e paginazione Google. I test email usano un trasporto simulato: verificano mittente, destinatario, fuso italiano, secrets mancanti, cancellazione, errori senza credenziali nei log e assenza di duplicati nei retry. Non si collegano a Gmail. Verificano esplicitamente che venga creato un solo intervallo reale di 30 minuti.
+Le suite coprono stagione inclusiva, orari, esclusione completa delle domeniche, buffer bidirezionale, pausa a pranzo, eventi lunghi/fuori orario/intera giornata, spostamenti, ora legale, passato, payload/validazione, conflitto finale e rifiuto di slot già prenotati, idempotenza, errore email, CORS, preflight, rate limit, payload e paginazione Google. Verificano il rifiuto della domenica prima di accedere a Calendar, anche con offset che cambiano il giorno rispetto a `Europe/Rome` e tramite POST diretta. I test email usano un trasporto simulato: verificano mittente, destinatario, fuso italiano, secrets mancanti, CCN presente/assente/malformato, esclusione del CCN dalle email diagnostiche, cancellazione, errori senza credenziali nei log e assenza di duplicati nei retry. Non si collegano a Gmail. Verificano esplicitamente che venga creato un solo intervallo reale di 30 minuti.
 
 ### Prova reale di creazione su Google Calendar
 

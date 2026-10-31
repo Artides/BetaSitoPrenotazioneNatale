@@ -22,6 +22,7 @@ public sealed class EmailTests
         {
             ["GMAIL_ADDRESS"] = " sender@gmail.com ",
             ["GMAIL_APP_PASSWORD"] = "abcd efgh ijkl mnop",
+            ["GMAIL_BCC_ADDRESS"] = " notify@example.com ",
             ["EMAIL_SENDER"] = "old@example.com",
             ["EMAIL_CONNECTION_STRING"] = "old-connection"
         }).Build();
@@ -29,6 +30,7 @@ public sealed class EmailTests
         Assert.True(options.Configured);
         Assert.Equal("sender@gmail.com", options.Sender);
         Assert.Equal("abcdefghijklmnop", options.AppPassword);
+        Assert.Equal("notify@example.com", options.BccAddress);
         Assert.DoesNotContain(options.AppPassword, options.ToString()!);
     }
 
@@ -60,6 +62,7 @@ public sealed class EmailTests
         Assert.Equal(Options.Sender, transport.Username);
         Assert.Equal(Options.AppPassword, transport.Password);
         Assert.Equal(1, transport.Sends);
+        Assert.Empty(transport.Bcc);
     }
 
     [Fact]
@@ -86,11 +89,34 @@ public sealed class EmailTests
     public async Task TestEmailIsClearlyMarkedAndUsesRequestedRecipient()
     {
         var transport = new FakeTransport();
-        Assert.True(await Service(Options, transport).SendTestAsync("test@example.com", default));
+        Assert.True(await Service(new(Options.Sender, Options.AppPassword, "notify@example.com"), transport).SendTestAsync("test@example.com", default));
         Assert.Equal("test@example.com", transport.To);
         Assert.Equal("Test email prenotazioni", transport.Subject);
         Assert.Contains("Non è stata creata alcuna prenotazione", transport.Text);
         Assert.DoesNotContain("booking-code", transport.Text);
+        Assert.Empty(transport.Bcc);
+    }
+
+    [Fact]
+    public async Task ConfirmationAddsConfiguredBccWithoutChangingVisibleRecipientOrContent()
+    {
+        var transport = new FakeTransport();
+        var options = new EmailOptions(Options.Sender, Options.AppPassword, "notify@example.com");
+        Assert.True(await Service(options, transport).SendAsync(Request, Booking, default));
+        Assert.Equal("customer@example.com", transport.To);
+        Assert.Equal(["notify@example.com"], transport.Bcc);
+        Assert.Empty(transport.Cc);
+        Assert.DoesNotContain("notify@example.com", transport.Text);
+        Assert.DoesNotContain("notify@example.com", transport.Html);
+    }
+
+    [Fact]
+    public async Task MalformedBccDoesNotReachSmtp()
+    {
+        var transport = new FakeTransport();
+        var options = new EmailOptions(Options.Sender, Options.AppPassword, "first@example.com, second@example.com");
+        Assert.False(await Service(options, transport).SendAsync(Request, Booking, default));
+        Assert.Equal(0, transport.Sends);
     }
 
     [Fact]
@@ -118,7 +144,7 @@ public sealed class EmailTests
         var calendar = new FakeCalendar();
         var transport = new FakeTransport();
         var service = new BookingService(rules, new(rules, calendar, new FixedClock()), calendar,
-            Service(Options, transport), new NoCaptcha(), NullLogger<BookingService>.Instance);
+            Service(new(Options.Sender, Options.AppPassword, "notify@example.com"), transport), new NoCaptcha(), NullLogger<BookingService>.Instance);
         var key = Guid.NewGuid().ToString();
         var first = await service.BookAsync(Request, key, default);
         var retry = await service.BookAsync(Request, key, default);
@@ -126,6 +152,7 @@ public sealed class EmailTests
         Assert.False(retry.EmailSent);
         Assert.Equal(first.BookingId, retry.BookingId);
         Assert.Equal(1, transport.Sends);
+        Assert.Equal(["notify@example.com"], transport.Bcc);
     }
 
     private static EmailService Service(EmailOptions options, FakeTransport transport) =>
@@ -136,6 +163,7 @@ public sealed class EmailTests
         public int Sends { get; private set; }
         public Exception? Error { get; init; }
         public string? From, To, Subject, Text, Html, BodyType, Username, Password;
+        public string[] Bcc = [], Cc = [];
 
         public Task SendAsync(MimeMessage message, string username, string appPassword, CancellationToken ct)
         {
@@ -144,6 +172,8 @@ public sealed class EmailTests
             if (Error != null) throw Error;
             From = message.From.Mailboxes.Single().Address;
             To = message.To.Mailboxes.Single().Address;
+            Bcc = message.Bcc.Mailboxes.Select(a => a.Address).ToArray();
+            Cc = message.Cc.Mailboxes.Select(a => a.Address).ToArray();
             Subject = message.Subject;
             Text = message.TextBody;
             Html = message.HtmlBody;

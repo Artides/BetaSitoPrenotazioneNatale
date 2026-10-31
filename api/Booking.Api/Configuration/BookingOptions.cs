@@ -12,6 +12,7 @@ public sealed class BookingOptions
     public int DurationMinutes { get; init; } = 30;
     public int BreakMinutes { get; init; } = 30;
     public TimeZoneInfo Zone => TimeZoneInfo.FindSystemTimeZoneById(TimeZone);
+    public bool IsBookableDay(DateOnly day) => day >= StartDate && day <= EndDate && day.DayOfWeek != DayOfWeek.Sunday;
     public DateTimeOffset At(DateOnly date, TimeOnly time) {
         var local = date.ToDateTime(time, DateTimeKind.Unspecified);
         if (Zone.IsInvalidTime(local) || Zone.IsAmbiguousTime(local)) throw new ArgumentException("Ambiguous local time");

@@ -26,7 +26,8 @@ public sealed class BookingService(BookingOptions options,AvailabilityService av
         var (request,start)=Validate(input);
         if(!Guid.TryParseExact(key,"D",out var keyId)) throw new ApiException(400,"INVALID_IDEMPOTENCY_KEY");
         var day=DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(start,options.Zone).DateTime);
-        if(day<options.StartDate || day>options.EndDate) throw new ApiException(400,"INVALID_SLOT");
+        // Apply closed-day rules before Calendar access, including retries of old Sunday bookings.
+        if(!options.IsBookableDay(day)) throw new ApiException(400,"INVALID_SLOT");
         var fingerprint=BookingIdGenerator.Hash(JsonSerializer.Serialize(new { Start=start.ToUniversalTime(),request.Customer }));
         var eventId="b"+BookingIdGenerator.Hash(keyId.ToString("D"));
         // Complete an in-flight write even if the client disconnects; retries recover it by event ID.

@@ -51,14 +51,14 @@ public sealed class EmailService(EmailOptions options, BookingOptions rules, ISm
             </body>
             </html>
             """;
-        return SendMessageAsync(request.Customer.Email, "Prenotazione confermata", text, ct, html);
+        return SendMessageAsync(request.Customer.Email, "Prenotazione confermata", text, ct, html, includeBcc: true);
     }
 
     public Task<bool> SendTestAsync(string recipient, CancellationToken ct) => SendMessageAsync(recipient,
         "Test email prenotazioni",
         "Questa è un'email di prova del sito Appuntamenti di Natale 2026, inviata tramite Gmail SMTP.\n\nNon è stata creata alcuna prenotazione né alcun evento nel calendario.", ct);
 
-    private async Task<bool> SendMessageAsync(string recipient, string subject, string text, CancellationToken ct, string? html = null)
+    private async Task<bool> SendMessageAsync(string recipient, string subject, string text, CancellationToken ct, string? html = null, bool includeBcc = false)
     {
         if (!options.Configured)
         {
@@ -71,6 +71,10 @@ public sealed class EmailService(EmailOptions options, BookingOptions rules, ISm
             using var message = new MimeMessage();
             message.From.Add(MailboxAddress.Parse(options.Sender));
             message.To.Add(MailboxAddress.Parse(recipient));
+            // The optional notification address comes only from server configuration.
+            // Diagnostic test emails deliberately do not notify this recipient.
+            if (includeBcc && !string.IsNullOrWhiteSpace(options.BccAddress))
+                message.Bcc.Add(MailboxAddress.Parse(options.BccAddress));
             message.Subject = subject;
             message.Body = new BodyBuilder { TextBody = text, HtmlBody = html }.ToMessageBody();
             await transport.SendAsync(message, options.Sender, options.AppPassword, ct);

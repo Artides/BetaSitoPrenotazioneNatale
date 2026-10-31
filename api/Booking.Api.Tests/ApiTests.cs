@@ -27,5 +27,10 @@ public sealed class ApiTests {
     [Fact] public async Task RateLimitStopsExcessPosts() {var e=Endpoints();for(var i=0;i<10;i++) await e.BookAsync(Request("POST","{}"));var r=Assert.IsType<ObjectResult>(await e.BookAsync(Request("POST","{}")));Assert.Equal(429,r.StatusCode);}
     [Fact] public async Task RejectsLargeBodyWithoutTrustingContentLength() {var r=Assert.IsType<ObjectResult>(await Endpoints().BookAsync(Request("POST",new string('x',8193))));Assert.Equal(413,r.StatusCode);}
     [Fact] public async Task InvalidDateRangeReturnsBadRequest() {var r=Request();r.QueryString=new("?from=2026-11-20&to=2026-11-10");Assert.Equal(400,Assert.IsType<ObjectResult>(await Endpoints().AvailabilityAsync(r)).StatusCode);}
+    [Fact] public async Task DirectPostCannotBookSunday() {
+        var result=Assert.IsType<ObjectResult>(await Endpoints().BookAsync(Request("POST","""{"start":"2026-11-08T10:00:00+01:00","customer":{"name":"Mario","email":"m@example.com"}}""")));
+        Assert.Equal(400,result.StatusCode);
+        Assert.Contains("INVALID_SLOT",System.Text.Json.JsonSerializer.Serialize(result.Value));
+    }
     private sealed class PassCaptcha:ICaptchaService {public Task ValidateAsync(string? token,CancellationToken ct)=>Task.CompletedTask;}
 }

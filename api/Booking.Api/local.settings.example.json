@@ -19,6 +19,7 @@
     "GOOGLE_REFRESH_TOKEN": "",
     "GMAIL_ADDRESS": "",
     "GMAIL_APP_PASSWORD": "",
+    "GMAIL_BCC_ADDRESS": "",
     "TURNSTILE_SECRET_KEY": "",
     "TURNSTILE_ALLOWED_HOSTNAMES": "localhost,127.0.0.1"
   }

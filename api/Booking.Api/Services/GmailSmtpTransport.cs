@@ -27,7 +27,11 @@ public sealed class GmailSmtpTransport(ILogger<GmailSmtpTransport> logger) : ISm
         await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls, ct);
         client.AuthenticationMechanisms.Remove("XOAUTH2");
         await client.AuthenticateAsync(username, appPassword, ct);
-        await client.SendAsync(message, ct);
+        var format = FormatOptions.Default.Clone();
+        // Bcc recipients stay in the SMTP envelope and are hidden in the delivered headers.
+        format.HiddenHeaders.Add(HeaderId.Bcc);
+        format.HiddenHeaders.Add(HeaderId.ResentBcc);
+        await client.SendAsync(format, message, ct);
         // Delivery was accepted. A QUIT failure must not turn a successful send into a failure.
         try { await client.DisconnectAsync(true, ct); }
         catch (Exception) { }

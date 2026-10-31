@@ -41,6 +41,36 @@ public sealed class BookingTests {
         Assert.Equal("SLOT_NOT_AVAILABLE", ex.Code);
         Assert.Equal(1, calendar.Creates);
     }
+
+    [Theory]
+    [InlineData("2026-11-08T10:00:00+01:00")]
+    [InlineData("2026-11-15T14:00:00+01:00")]
+    [InlineData("2026-11-22T16:00:00+01:00")]
+    [InlineData("2026-11-29T12:30:00+01:00")]
+    [InlineData("2026-11-08T09:00:00Z")]
+    [InlineData("2026-11-07T23:30:00-10:00")]
+    [InlineData("2026-11-09T00:00:00+14:00")]
+    public async Task SundaysInRomeAreRejectedBeforeAnyCalendarAccess(string start) {
+        var unavailable=new UnavailableCalendar();
+        var service=new BookingService(rules,new(rules,unavailable,new FixedClock()),unavailable,
+            new BrokenEmail(),new NoCaptcha(),NullLogger<BookingService>.Instance);
+        var ex=await Assert.ThrowsAsync<ApiException>(()=>service.BookAsync(Request(start),Guid.NewGuid().ToString(),default));
+        Assert.Equal(400,ex.Status);
+        Assert.Equal("INVALID_SLOT",ex.Code);
+    }
+
+    [Fact] public async Task MondayInRomeRemainsBookableWithDifferentClientOffset() {
+        var result=await Service.BookAsync(Request("2026-11-08T23:00:00-10:00"),Guid.NewGuid().ToString(),default);
+        Assert.True(result.Success);
+        Assert.Equal(DayOfWeek.Monday,TimeZoneInfo.ConvertTime(result.Start,rules.Zone).DayOfWeek);
+        Assert.Equal(1,calendar.Creates);
+    }
+
+    private sealed class UnavailableCalendar:ICalendarService {
+        public Task<IReadOnlyList<CalendarEvent>> ListAsync(DateTimeOffset from,DateTimeOffset to,CancellationToken ct)=>throw new InvalidOperationException("Calendar must not be contacted for a closed day.");
+        public Task<CalendarEvent?> FindAsync(string id,CancellationToken ct)=>throw new InvalidOperationException("Calendar must not be contacted for a closed day, including retries.");
+        public Task<CalendarEvent> CreateAsync(string id,string bookingId,string fingerprint,BookingRequest request,DateTimeOffset start,DateTimeOffset end,CancellationToken ct)=>throw new InvalidOperationException("Calendar must not be contacted for a closed day.");
+    }
     private sealed class BrokenEmail:IEmailService {public Task<bool> SendAsync(BookingRequest r,BookingResponse b,CancellationToken ct)=>throw new InvalidOperationException("email down");}
     private sealed class NoCaptcha:ICaptchaService {public Task ValidateAsync(string? token,CancellationToken ct)=>Task.CompletedTask;}
 }
